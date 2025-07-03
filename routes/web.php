@@ -55,6 +55,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/myaccount/password', [UserDashboardController::class, 'password'])->name('user.profile.password');
     Route::put('/myaccount/password', [UserDashboardController::class, 'updatePassword'])->name('user.profile.update-password ');
 
+// routes/web.php
+
+Route::post('/process-payment', [CheckoutController::class, 'processPayment'])->name('process.payment');
+Route::post('/confirm-payment', [CheckoutController::class, 'confirmPayment'])->name('confirm.payment');
+Route::get('/thankyou/{order}', function (Order $order) {
+    return view('thankyou', compact('order'));
+})->name('thankyou');
 
 
 });

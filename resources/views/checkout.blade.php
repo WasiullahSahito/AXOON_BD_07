@@ -188,6 +188,7 @@
 
 
 
+
 	          <div class="row mt-5 pt-3 d-flex">
 	          	<div class="col-md-6 d-flex">
 	          		<div class="cart-detail cart-total bg-light p-3 p-md-4">
@@ -250,6 +251,20 @@
         </div>
       </div>
     </section> <!-- .section -->
+	<!-- Add this inside the payment method section -->
+	<div class="form-group">
+		<div class="col-md-12">
+			<div class="radio">
+				<label><input type="radio" name="payment_method" value="stripe" class="mr-2" checked> Credit Card
+					(Stripe)</label>
+			</div>
+		</div>
+	</div>
+	
+	<div id="stripe-card-element" class="mt-3">
+		<!-- Stripe card element will be inserted here -->
+	</div>
+	<div id="stripe-card-errors" class="text-danger mt-2"></div>
 		
 
     <footer class="ftco-footer ftco-section">
@@ -398,6 +413,77 @@
     
   <script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"rayId":"951d68583fe03de4","version":"2025.6.2","serverTiming":{"name":{"cfExtPri":true,"cfEdge":true,"cfOrigin":true,"cfL4":true,"cfSpeedBrain":true,"cfCacheStatus":true}},"token":"cd0b4b3a733644fc843ef0b185f98241","b":1}' crossorigin="anonymous"></script>
 </body>
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+	const stripe = Stripe("{{ config('services.stripe.key') }}");
+	const elements = stripe.elements();
+	const cardElement = elements.create('card');
+	cardElement.mount('#stripe-card-element');
+
+	cardElement.on('change', (event) => {
+		const displayError = document.getElementById('stripe-card-errors');
+		displayError.textContent = event.error ? event.error.message : '';
+	});
+
+	// Handle form submission
+	document.querySelector('form').addEventListener('submit', async (e) => {
+		e.preventDefault();
+
+		const submitButton = document.querySelector('button[type="submit"]');
+		submitButton.disabled = true;
+
+		try {
+			// Create payment method
+			const { paymentMethod, error } = await stripe.createPaymentMethod({
+				type: 'card',
+				card: cardElement,
+			});
+
+			if (error) {
+				document.getElementById('stripe-card-errors').textContent = error.message;
+				submitButton.disabled = false;
+				return;
+			}
+
+			// Create payment intent
+			const response = await fetch("{{ route('process.payment') }}", {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'X-CSRF-TOKEN': "{{ csrf_token() }}"
+				},
+				body: JSON.stringify({
+					total: {{ $cartTotal }}, // Pass your cart total
+				})
+			});
+
+			const { clientSecret } = await response.json();
+
+			// Confirm payment
+			const { paymentIntent, error: confirmError } = await stripe.confirmCardPayment(
+				clientSecret,
+				{
+					payment_method: paymentMethod.id,
+				}
+			);
+
+			if (confirmError) {
+				document.getElementById('stripe-card-errors').textContent = confirmError.message;
+				submitButton.disabled = false;
+				return;
+			}
+
+			// Payment succeeded - submit form
+			document.getElementById('payment_intent_id').value = paymentIntent.id;
+			document.querySelector('form').submit();
+
+		} catch (error) {
+			console.error('Error:', error);
+			document.getElementById('stripe-card-errors').textContent = 'An unexpected error occurred.';
+			submitButton.disabled = false;
+		}
+	});
+</script>
 
 <!-- Mirrored from preview.colorlib.com/theme/minishop/checkout.html by HTTrack Website Copier/3.x [XR&CO'2014], Wed, 18 Jun 2025 20:07:05 GMT -->
 </html>
